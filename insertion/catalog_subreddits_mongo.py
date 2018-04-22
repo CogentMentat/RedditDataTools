@@ -1,9 +1,10 @@
 # coding: utf-8
 """
-Insert Reddit data to mongodb.
+Catalog subreddits found in a submission collection into a new collection
+associating subreddit_id and subreddit fields, with .
 
 Author: Alexander TJ Barron
-Date Created: 2018-02-22
+Date Created: 2018-03-05
 
 """
 
@@ -13,7 +14,7 @@ import argparse
 
 from pymongo import MongoClient
 
-def main(dbname, submissioncollname):
+def catalog_subreddits_mongo(dbname, submissioncollname):
 
     client = MongoClient()
 
@@ -33,35 +34,30 @@ def main(dbname, submissioncollname):
     assert insertcollname not in db.collection_names(), \
             "{} collection already in db.".format(insertcollname)
 
-    # Read files and inserting records.
-    subredid_subreddit = set()
-    for rec in submcoll.find({}, {"subreddit":1, "subreddit_id":1}):
+    # Check that the subreddit_id field has an index.
+    assert "subreddit_id_1" in submcoll.index_information(), \
+            "subreddit_id index not present on submission collection"
 
-        try:
-            subreddit = rec["subreddit"]
-            subredid = rec["subreddit_id"]
-        except KeyError:
-            continue
-
-        subredid_subreddit.add((subredid, subreddit))
-
-    # Count subreddit submissions
-    subredid_counts = [(sid, submcoll.find({'subreddit_id':sid}).count()) \
-            for sid, sd in subredid_subreddit]
-    d_subredid_cnt = dict(subredid_counts)
-
-    insert_records = [{"subreddit_id": sid,
-                       "subreddit": sd,
-                       "submission_count": d_subredid_cnt[sid]} \
-                      for sid, sd in subredid_subreddit]
-
-    # Insert to db.
+    # We can catalog all `subreddit_id` instances, their associated subreddit
+    # names (`subreddit`) (sometimes the subreddit is the same, so has the
+    # same id, but the name changes), and the number of submissions in the
+    # subreddit using mongodb's aggregate function.  Using the `$out` operator
+    # also inserts the results of aggregate into a new collection.
+    groupstage = {"$group": {"_id": "$subreddit_id",
+                             "subreddit": {"$addToSet": "$subreddit"},
+                             "submission_count": {"$sum": 1}}}
+    outstage = {"$out": insertcollname}
+    # aggregate's memory usage is capped, so we set a flag to allow disk usage
+    # if necessary.
+    commandcursor = submcoll.aggregate([groupstage, outstage],
+                                       allowDiskUse=True)
 
     insertcoll = db[insertcollname]
-    response = insertcoll.insert_many(insert_records,
-                                      ordered=False)
-    insertcoll.create_index("subreddit_id")
     insertcoll.create_index("subreddit")
+
+def main(dbname, submissioncollname):
+
+    catalog_subreddits_mongo(dbname, submissioncollname)
 
 if __name__ == "__main__":
 
