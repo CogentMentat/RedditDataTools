@@ -46,9 +46,35 @@ class RedditGetter(object):
         dtm = datetime(int(y), int(m), int(d))
         return int(dtm.timestamp())
 
-    def get_records(self, dbname, collname, fielddict, chunksize,
-            timebounds=None, projectiondict=None):
-        """Get records defined by fielddict, in chunks."""
+    def get_records(self, dbname, collname, fielddict, chunksize=None,
+            timebounds=None, projectiondict=None, limit=None):
+        """
+        Get records defined by fielddict.
+
+        Args:
+          dbname (str): database name
+          collname (str): collection name in database
+          fielddict (dict): dictionary of fields and values to use in mongo
+            collection's `find` function
+          chunksize (int, optional): return results in chunksize blocks if
+            desired
+          timebounds (tuple or list, optional): sequence containing two
+            ISO-formatted date strings in chronological order, for example
+
+                ['2011-03-01', '2011-04-01']
+          projectiondict (dict): dictionary of fields to include or exclude,
+            marking with 1 or 0.  For example, include 'blah' field, and
+            exclude 'porg' field:
+
+                {'blah':1, 'porg':0}
+
+            '_id' field is always returned unless explicitly excluded in the
+            projection dictionary.
+
+        Returns:
+          generator of chunks or records according to provided parameters
+
+        """
 
         db = self.client[dbname]
         collection = db[collname]
@@ -60,19 +86,21 @@ class RedditGetter(object):
         if timebounds:
             ts0 = self._make_timestamp_from_isodatetime(timebounds[0])
             ts1 = self._make_timestamp_from_isodatetime(timebounds[1])
-            if collname == 'Comment':
-                ts0 = str(ts0)
-                ts1 = str(ts1)
             query_dicts.append({"created_utc": {"$gte":ts0}})
             query_dicts.append({"created_utc": {"$lt":ts1}})
 
-        query_dict = {"$and": query_dicts}
-
-        if projectiondict:
-            ret = self._grouper(collection.find(query_dict, projectiondict),
-                    chunksize)
+        if len(query_dicts) > 1:
+            query_dict = {"$and": query_dicts}
         else:
-            ret = self._grouper(collection.find(query_dict), chunksize)
+            query_dict = fielddict
+
+        ret = collection.find(query_dict, projection=projectiondict)
+
+        if chunksize:
+            ret = self._grouper(ret, chunksize)
+
+        if limit:
+            ret = ret.limit(limit)
 
         return ret
 
