@@ -28,7 +28,7 @@ def grouper(iterable, n, fillvalue=None):
 
     return zip_longest(*arguments, fillvalue=fillvalue)
 
-def main(dbname, collectionname, chunksize, filepaths):
+def insert_Reddit_tomongo(dbname, collectionname, chunksize, filepaths):
 
     client = MongoClient()
 
@@ -91,6 +91,10 @@ def main(dbname, collectionname, chunksize, filepaths):
 
     for indexfield in indexfields:
         response = collection.create_index(indexfield)
+
+def main(dbname, collectionname, chunksize, filepaths):
+
+    insert_Reddit_tomongo(dbname, collectionname, chunksize, filepaths)
 
 if __name__ == "__main__":
 
