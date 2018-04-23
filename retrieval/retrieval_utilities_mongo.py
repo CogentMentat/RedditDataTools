@@ -47,7 +47,7 @@ class RedditGetter(object):
         return int(dtm.timestamp())
 
     def get_records(self, dbname, collname, fielddict, chunksize=None,
-            timebounds=None, projectiondict=None, limit=None):
+            timebounds=None, projectiondict=None, limit=None, batchsize=None):
         """
         Get records defined by fielddict.
 
@@ -70,6 +70,8 @@ class RedditGetter(object):
 
             '_id' field is always returned unless explicitly excluded in the
             projection dictionary.
+          batchsize (int, optional): sets number of records queried at one
+            time by mongo, in case of cursor time-out issues
 
         Returns:
           generator of chunks or records according to provided parameters
@@ -95,6 +97,9 @@ class RedditGetter(object):
             query_dict = fielddict
 
         ret = collection.find(query_dict, projection=projectiondict)
+
+        if batchsize:
+            ret = ret.batch_size(batchsize)
 
         if chunksize:
             ret = self._grouper(ret, chunksize)
