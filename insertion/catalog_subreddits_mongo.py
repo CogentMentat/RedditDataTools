@@ -14,7 +14,8 @@ import argparse
 
 from pymongo import MongoClient
 
-def catalog_subreddits_mongo(dbname, submissioncollname):
+def catalog_subreddits_mongo(dbname, submissioncollname, commentcollname,
+        subredditmapname):
 
     client = MongoClient()
 
@@ -27,8 +28,9 @@ def catalog_subreddits_mongo(dbname, submissioncollname):
 
     db = client[dbname]
     submcoll = db[submissioncollname]
+    commcoll = db[commentcollname]
 
-    insertcollname = "SubredIdMap"
+    insertcollname = subredditmapname
 
     # Check that insertion collection doesn't exist.
     assert insertcollname not in db.collection_names(), \
@@ -55,9 +57,30 @@ def catalog_subreddits_mongo(dbname, submissioncollname):
     insertcoll = db[insertcollname]
     insertcoll.create_index("subreddit")
 
-def main(dbname, submissioncollname):
+    # Get comment counts for subreddits in the comment collection.
+    groupstage = {"$group": {"_id": "$subreddit_id",
+                             "subreddit": {"$addToSet": "$subreddit"},
+                             "comment_count": {"$sum": 1}}}
+    records = commcoll.aggregate([groupstage], allowDiskUse=True)
 
-    catalog_subreddits_mongo(dbname, submissioncollname)
+    # Create dictionary of comment counts.
+    commcount_dict = dict([(rec["_id"], rec["comment_count"]) for rec in
+                           records])
+
+    # Update SubredIdMap with comment counts.
+    records = list(insertcoll.find({}))
+    for rec in records:
+        subredidmap_id = rec["_id"]
+        try:
+            commcount = commcount_dict[subredidmap_id]
+        except KeyError:
+            continue
+        insertcoll.update_one({"_id": subredidmap_id}, {"$set":
+            {"comment_count": commcount}})
+
+def main(dbname, submissioncollname, commentcollname, subredditmapname):
+
+    catalog_subreddits_mongo(dbname, submissioncollname, commentcollname, subredditmapname)
 
 if __name__ == "__main__":
 
@@ -66,7 +89,12 @@ if __name__ == "__main__":
             help="DB containing submission collection.")
     parser.add_argument('submissioncollname', type=str,
             help="Submission collection name.")
+    parser.add_argument('commentcollname', type=str,
+            help="Comment collection name.")
+    parser.add_argument('subredditmapname', type=str,
+            help="Name of resulting subreddit map collection.")
 
     args = parser.parse_args()
 
-    main(args.dbname, args.submissioncollname)
+    main(args.dbname, args.submissioncollname, args.commentcollname,
+            args.subredditmapname)
