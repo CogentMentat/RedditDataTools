@@ -83,9 +83,10 @@ def insert_Reddit_tomongo(dbname, collectionname, chunksize, filepaths):
     # Add indexes.
 
     if re.match("RS", fname): # Submissions
-        indexfields = ["name", "author", "subreddit_id"]
+        indexfields = ["name", "author", "subreddit_id", "created_utc"]
     elif re.match("RC", fname): # Comments
-        indexfields = ["parent_id", "name", "author", "subreddit_id"]
+        indexfields = ["parent_id", "name", "author", "subreddit_id",
+                "created_utc"]
     else:
         raise Exception("'RS' or 'RC' should start the file name.")
 
