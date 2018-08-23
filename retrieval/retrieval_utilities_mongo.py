@@ -91,6 +91,8 @@ class RedditGetter(object):
             query_dicts.append({"created_utc": {"$gte":ts0}})
             query_dicts.append({"created_utc": {"$lt":ts1}})
 
+        pdb.set_trace()
+
         if len(query_dicts) > 1:
             query_dict = {"$and": query_dicts}
         else:
